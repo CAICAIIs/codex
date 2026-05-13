@@ -1,0 +1,22 @@
+{
+  "id": "real-004-redaction-bearer-token",
+  "title": "Real 004 redaction bearer token",
+  "category": "real-feature-bug",
+  "risk_level": "medium",
+  "instruction": "In an isolated workspace, extend the redactor so Bearer tokens are masked in addition to sk-style keys.",
+  "workspace_fixture": ".codex/harness/evals/fixtures/real-004-redaction-bearer-token",
+  "requires_attempt_evidence": true,
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_real_task.py real-004-redaction-bearer-token"
+  ],
+  "success_criteria": [
+    "redactor.redact masks `Bearer demo` style credentials and preserves non-secret text."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Real feature/bug benchmark task 4/10."
+}

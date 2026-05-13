@@ -1,0 +1,21 @@
+{
+  "id": "model-router-safety",
+  "title": "Validate multi-model routing safety",
+  "category": "workflow",
+  "risk_level": "medium",
+  "instruction": "Check that the personal Codex model router stays small, budgeted, Chinese-first, and forbids remote write actions by default.",
+  "setup": [],
+  "verifier": ["python3 .codex/harness/scripts/validate_harness.py"],
+  "success_criteria": [
+    "The validator exits with code 0.",
+    "The router has no more than four routes.",
+    "Every route has budget and stop-loss fields.",
+    "Remote write actions require current-conversation confirmation."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "This task guards against process sprawl: if more roles or routes are added, they must be justified by evaluation data."
+}

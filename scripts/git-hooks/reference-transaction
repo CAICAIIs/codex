@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+state="${1:-}"
+case "$state" in
+  preparing|prepared)
+    ;;
+  *)
+    cat >/dev/null
+    exit 0
+    ;;
+esac
+
+all_zero_oid="0000000000000000000000000000000000000000"
+blocked=()
+
+while IFS=' ' read -r old_value new_value ref_name; do
+  if [[ "$ref_name" == refs/heads/codex/* && "$new_value" != "$all_zero_oid" ]]; then
+    blocked+=("${ref_name#refs/heads/}")
+  fi
+done
+
+if [[ "${#blocked[@]}" -gt 0 ]]; then
+  echo "branch guard: refusing local branch name(s) starting with codex/:" >&2
+  printf '  %s\n' "${blocked[@]}" >&2
+  echo "branch guard: use caicai/..., feature/..., fix/..., or task/... instead." >&2
+  exit 1
+fi

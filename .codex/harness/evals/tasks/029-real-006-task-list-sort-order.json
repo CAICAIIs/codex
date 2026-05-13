@@ -1,0 +1,22 @@
+{
+  "id": "real-006-task-list-sort-order",
+  "title": "Real 006 task list sort order",
+  "category": "real-feature-bug",
+  "risk_level": "low",
+  "instruction": "In an isolated workspace, make task listing deterministic by sorting tasks by id.",
+  "workspace_fixture": ".codex/harness/evals/fixtures/real-006-task-list-sort-order",
+  "requires_attempt_evidence": true,
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_real_task.py real-006-task-list-sort-order"
+  ],
+  "success_criteria": [
+    "list_tasks returns task dictionaries ordered by ascending id."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Real feature/bug benchmark task 6/10."
+}

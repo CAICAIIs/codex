@@ -48,6 +48,8 @@ AGENTS.override.md
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.codex/harness/runs/paired-workspaces/
+.codex/checkpoints/
 
 # env
 .env*

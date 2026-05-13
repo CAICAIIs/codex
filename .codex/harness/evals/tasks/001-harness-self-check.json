@@ -1,0 +1,20 @@
+{
+  "id": "harness-self-check",
+  "title": "Validate the personal Codex harness",
+  "category": "workflow",
+  "risk_level": "low",
+  "instruction": "Check whether the CAICAIIs Codex harness documents and scripts are internally consistent, avoid hardcoded secrets, and define a measurable evaluation path.",
+  "setup": [],
+  "verifier": ["python3 .codex/harness/scripts/validate_harness.py"],
+  "success_criteria": [
+    "The validator exits with code 0.",
+    "No hardcoded API key pattern is found under .codex/harness.",
+    "Core harness documents and the sample eval task exist."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not put API keys in files."
+  ],
+  "notes": "This is the first smoke task. It proves the harness can verify itself before larger coding benchmarks are added."
+}

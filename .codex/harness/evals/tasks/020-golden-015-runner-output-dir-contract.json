@@ -1,0 +1,20 @@
+{
+  "id": "golden-015-runner-output-dir-contract",
+  "title": "Golden 015 runner output dir contract",
+  "category": "harness-contract-cli-env",
+  "risk_level": "medium",
+  "instruction": "Verify that E2E assertion scripts can use a restricted temporary output directory.",
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_golden_task.py golden-015-runner-output-dir-contract"
+  ],
+  "success_criteria": [
+    "assert_unsafe_command_denylist.py passes with CODEX_HARNESS_TEST_TMPDIR set."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not run destructive git commands."
+  ],
+  "notes": "Harness contract CLI/environment task 5/5."
+}

@@ -1,0 +1,22 @@
+{
+  "id": "real-012-cli-router-json-provider-fixture",
+  "title": "Real 012 CLI router JSON provider fixture",
+  "category": "real-cli-env",
+  "risk_level": "low",
+  "instruction": "In an isolated workspace, include provider availability in the router JSON fixture output.",
+  "workspace_fixture": ".codex/harness/evals/fixtures/real-012-cli-router-json-provider-fixture",
+  "requires_attempt_evidence": true,
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_real_task.py real-012-cli-router-json-provider-fixture"
+  ],
+  "success_criteria": [
+    "router.router_json returns provider_availability entries for kimi-code and glm-5.1."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Real CLI/environment benchmark task 2/5."
+}

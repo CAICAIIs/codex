@@ -1,5 +1,16 @@
 # Rust/codex-rs
 
+## CAICAIIs Local Tooling
+
+This fork carries personal local tooling under `.codex/harness/` and `scripts/caicodex*`.
+Keep the committed surface executable and minimal: scripts, JSON config, fixtures, tests, and
+small fork rules are acceptable; run logs, RLCR transcripts, checkpoint data, and README-style
+documentation should stay local unless the user explicitly asks to publish them.
+
+Do not create local branches whose names start with `codex/`. This fork includes a local
+`reference-transaction` hook installed by `caicodex branch-guard install` to reject
+`refs/heads/codex/*`; use `caicai/...`, `feature/...`, `fix/...`, or `task/...` instead.
+
 In the codex-rs folder where the rust code lives:
 
 - Crate names are prefixed with `codex-`. For example, the `core` folder's crate is named `codex-core`

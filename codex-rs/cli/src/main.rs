@@ -46,11 +46,14 @@ use supports_color::Stream;
 mod app_cmd;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod desktop_app;
+mod harness_advisor_cmd;
+mod harness_cmd;
 mod marketplace_cmd;
 mod mcp_cmd;
 #[cfg(not(windows))]
 mod wsl_paths;
 
+use crate::harness_cmd::HarnessCommand;
 use crate::marketplace_cmd::MarketplaceCli;
 use crate::mcp_cmd::McpCli;
 
@@ -122,6 +125,9 @@ enum Subcommand {
 
     /// Manage Codex plugins.
     Plugin(PluginCli),
+
+    /// Inspect and run the project-level Codex harness.
+    Harness(HarnessCommand),
 
     /// Start Codex as an MCP server (stdio).
     McpServer,
@@ -890,6 +896,14 @@ async fn cli_main(arg0_paths: Arg0DispatchPaths) -> anyhow::Result<()> {
                     marketplace_cli.run().await?;
                 }
             }
+        }
+        Some(Subcommand::Harness(harness_cli)) => {
+            reject_remote_mode_for_subcommand(
+                root_remote.as_deref(),
+                root_remote_auth_token_env.as_deref(),
+                "harness",
+            )?;
+            harness_cmd::run_harness_command(harness_cli)?;
         }
         Some(Subcommand::AppServer(app_server_cli)) => {
             let AppServerCommand {
@@ -2025,6 +2039,14 @@ mod tests {
         };
 
         assert!(cmd.bundled);
+    }
+
+    #[test]
+    fn harness_status_parses() {
+        let cli =
+            MultitoolCli::try_parse_from(["codex", "harness", "status", "--json"]).expect("parse");
+
+        assert!(matches!(cli.subcommand, Some(Subcommand::Harness(_))));
     }
 
     #[test]

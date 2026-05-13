@@ -1,0 +1,20 @@
+{
+  "id": "golden-003-eval-record-metadata-contract",
+  "title": "Golden 003 eval record metadata contract",
+  "category": "harness-contract-feature",
+  "risk_level": "low",
+  "instruction": "Verify that eval JSONL records contain variant, route/model, repeat, wall time, and git metadata.",
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_golden_task.py golden-003-eval-record-metadata-contract"
+  ],
+  "success_criteria": [
+    "A temporary eval run writes the required A/B metadata fields."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Harness contract feature task 3/10."
+}

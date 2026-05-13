@@ -1,0 +1,18 @@
+{
+  "id": "golden-011-validate-harness-command",
+  "title": "Golden 011 validate harness command",
+  "category": "harness-contract-cli-env",
+  "risk_level": "low",
+  "instruction": "Verify that the harness validator passes in the local environment.",
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_golden_task.py golden-011-validate-harness-command"
+  ],
+  "success_criteria": ["validate_harness.py exits 0."],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Harness contract CLI/environment task 1/5."
+}

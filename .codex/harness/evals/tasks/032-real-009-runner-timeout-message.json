@@ -1,0 +1,22 @@
+{
+  "id": "real-009-runner-timeout-message",
+  "title": "Real 009 runner timeout message",
+  "category": "real-feature-bug",
+  "risk_level": "low",
+  "instruction": "In an isolated workspace, make the timeout result message include the timeout duration in seconds.",
+  "workspace_fixture": ".codex/harness/evals/fixtures/real-009-runner-timeout-message",
+  "requires_attempt_evidence": true,
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_real_task.py real-009-runner-timeout-message"
+  ],
+  "success_criteria": [
+    "timeout_result(3) returns exit_code 124 and stderr containing `command timed out after 3s`."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Real feature/bug benchmark task 9/10."
+}

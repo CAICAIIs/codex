@@ -1,0 +1,22 @@
+{
+  "id": "real-002-config-schema-title-sync",
+  "title": "Real 002 config schema title sync",
+  "category": "real-feature-bug",
+  "risk_level": "low",
+  "instruction": "In an isolated workspace, sync the JSON schema title and README copy to the expected harness task config name.",
+  "workspace_fixture": ".codex/harness/evals/fixtures/real-002-config-schema-title-sync",
+  "requires_attempt_evidence": true,
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_real_task.py real-002-config-schema-title-sync"
+  ],
+  "success_criteria": [
+    "config.schema.json has title `Harness Task Config` and README.md documents the same name."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Real feature/bug benchmark task 2/10."
+}

@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${CAICAI_CODEX_REPO:-/Users/caicaiis/Documents/github/codex}"
+CODEX_BIN="${CAICAI_CODEX_BIN:-$ROOT/codex-rs/target/debug/codex}"
+CC_SWITCH="${CAICAI_CC_SWITCH:-$HOME/.local/bin/cc-switch}"
+BRANCH_GUARD_SOURCE="$ROOT/scripts/git-hooks/reference-transaction"
+
+# Keep the current Codex records as the single source of truth by default.
+export CODEX_HOME="${CAICAI_CODEX_HOME:-$HOME/.codex}"
+
+usage() {
+  cat <<'EOF'
+caicodex - CAICAIIs personal Codex launcher
+
+Usage:
+  caicodex [codex args...]
+  caicodex providers
+  caicodex current
+  caicodex switch <provider-id>
+  caicodex with <provider-id-or-name> -- [codex args...]
+  caicodex open
+  caicodex wallpaper [on|off|status] [--image <jpg>]
+  caicodex branch-guard [install|status]
+  caicodex hookify <add|remove|enable|disable|list|defaults|compile|run> ...
+  caicodex checkpoint <create|list|show|restore|install-hook|status> ...
+  caicodex prompt-kit <install|status|check|print|sources> ...
+  caicodex doctor
+
+Behavior:
+  - Runs the locally built Codex binary from ~/Documents/github/codex.
+  - Uses CODEX_HOME=$HOME/.codex by default, so existing sessions, skills,
+    history, memories, and cc-switch provider configs are reused.
+  - Delegates provider switching to cc-switch --app codex.
+
+Overrides:
+  CAICAI_CODEX_REPO   Path to the personal codex repo.
+  CAICAI_CODEX_BIN    Path to a codex binary.
+  CAICAI_CODEX_HOME   Codex home to use instead of ~/.codex.
+  CAICAI_CODEX_APP    macOS app bundle to open.
+  CAICAI_CODEX_WALLPAPER_IMAGE
+                     Wallpaper image used by caicodex wallpaper on.
+  CAICAI_CC_SWITCH    Path to cc-switch.
+EOF
+}
+
+need_file() {
+  local path="$1"
+  local label="$2"
+  if [[ ! -e "$path" ]]; then
+    echo "caicodex: missing $label: $path" >&2
+    exit 127
+  fi
+}
+
+branch_guard_target() {
+  git -C "$ROOT" rev-parse --git-path hooks/reference-transaction
+}
+
+branch_guard_status() {
+  local target
+  target="$(branch_guard_target)"
+  echo "source: $BRANCH_GUARD_SOURCE"
+  echo "target: $target"
+  if [[ -x "$target" ]] && cmp -s "$BRANCH_GUARD_SOURCE" "$target"; then
+    echo "status: installed"
+  elif [[ -e "$target" ]]; then
+    echo "status: drifted"
+  else
+    echo "status: missing"
+  fi
+}
+
+install_branch_guard() {
+  need_file "$BRANCH_GUARD_SOURCE" "branch guard hook source"
+  local target
+  target="$(branch_guard_target)"
+  mkdir -p "$(dirname "$target")"
+  install -m 0755 "$BRANCH_GUARD_SOURCE" "$target"
+  echo "caicodex: installed branch guard: $target"
+  branch_guard_status
+}
+
+cmd="${1:-}"
+
+case "$cmd" in
+  "" )
+    need_file "$CODEX_BIN" "Codex binary"
+    exec "$CODEX_BIN"
+    ;;
+  -h|--help|help )
+    usage
+    ;;
+  doctor|where )
+    echo "repo:        $ROOT"
+    echo "codex:       $CODEX_BIN"
+    echo "codex_home:  $CODEX_HOME"
+    echo "app:         ${CAICAI_CODEX_APP:-$HOME/Applications/CAICAI Codex.app}"
+    echo "cc-switch:   $CC_SWITCH"
+    branch_guard_status | sed 's/^/branch_guard_/'
+    [[ -x "$CODEX_BIN" ]] && "$CODEX_BIN" --version || true
+    [[ -x "$CC_SWITCH" ]] && "$CC_SWITCH" --version || true
+    ;;
+  open|app )
+    app="${CAICAI_CODEX_APP:-$HOME/Applications/CAICAI Codex.app}"
+    if [[ ! -d "$app" ]]; then
+      echo "caicodex: missing app bundle: $app" >&2
+      exit 127
+    fi
+    exec open "$app"
+    ;;
+  wallpaper )
+    shift
+    installer="$ROOT/scripts/macos/install-caicai-wallpaper"
+    need_file "$installer" "wallpaper installer"
+    exec "$installer" "$@"
+    ;;
+  hookify )
+    shift
+    hookify="$ROOT/scripts/caicodex-hookify"
+    need_file "$hookify" "hookify helper"
+    exec "$hookify" "$@"
+    ;;
+  checkpoint )
+    shift
+    checkpoint="$ROOT/scripts/caicodex-checkpoint"
+    need_file "$checkpoint" "checkpoint helper"
+    exec "$checkpoint" "$@"
+    ;;
+  prompt-kit|prompt_kit )
+    shift
+    prompt_kit="$ROOT/scripts/caicodex-prompt-kit"
+    need_file "$prompt_kit" "prompt kit helper"
+    exec "$prompt_kit" "$@"
+    ;;
+  branch-guard|branch_guard )
+    shift
+    case "${1:-status}" in
+      install|enable)
+        install_branch_guard
+        ;;
+      status)
+        branch_guard_status
+        ;;
+      *)
+        echo "usage: caicodex branch-guard [install|status]" >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  providers|provider-list )
+    need_file "$CC_SWITCH" "cc-switch"
+    exec "$CC_SWITCH" --app codex provider list
+    ;;
+  current|provider-current )
+    need_file "$CC_SWITCH" "cc-switch"
+    exec "$CC_SWITCH" --app codex provider current
+    ;;
+  switch )
+    shift
+    if [[ $# -lt 1 ]]; then
+      echo "usage: caicodex switch <provider-id>" >&2
+      exit 2
+    fi
+    need_file "$CC_SWITCH" "cc-switch"
+    "$CC_SWITCH" --app codex provider switch "$1"
+    "$CC_SWITCH" --app codex provider current
+    ;;
+  with )
+    shift
+    if [[ $# -lt 1 ]]; then
+      echo "usage: caicodex with <provider-id-or-name> -- [codex args...]" >&2
+      exit 2
+    fi
+    selector="$1"
+    shift
+    if [[ "${1:-}" == "--" ]]; then
+      shift
+    fi
+    need_file "$CODEX_BIN" "Codex binary"
+    need_file "$CC_SWITCH" "cc-switch"
+    shim_dir="$(mktemp -d "${TMPDIR:-/tmp}/caicodex.XXXXXX")"
+    cleanup() {
+      rm -rf "$shim_dir"
+    }
+    trap cleanup EXIT
+    ln -s "$CODEX_BIN" "$shim_dir/codex"
+    PATH="$shim_dir:$PATH" "$CC_SWITCH" start codex "$selector" -- "$@"
+    ;;
+  * )
+    need_file "$CODEX_BIN" "Codex binary"
+    exec "$CODEX_BIN" "$@"
+    ;;
+esac

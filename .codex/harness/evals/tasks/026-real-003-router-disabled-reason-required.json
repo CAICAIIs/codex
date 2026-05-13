@@ -1,0 +1,22 @@
+{
+  "id": "real-003-router-disabled-reason-required",
+  "title": "Real 003 router disabled reason required",
+  "category": "real-feature-bug",
+  "risk_level": "low",
+  "instruction": "In an isolated workspace, make disabled model-router routes explain why they are disabled.",
+  "workspace_fixture": ".codex/harness/evals/fixtures/real-003-router-disabled-reason-required",
+  "requires_attempt_evidence": true,
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_real_task.py real-003-router-disabled-reason-required"
+  ],
+  "success_criteria": [
+    "Every disabled route in model-router.json has a non-empty disabled_reason."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Real feature/bug benchmark task 3/10."
+}

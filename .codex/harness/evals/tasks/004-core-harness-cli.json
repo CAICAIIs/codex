@@ -1,0 +1,21 @@
+{
+  "id": "core-harness-cli",
+  "title": "Validate the Rust codex harness CLI",
+  "category": "cli",
+  "risk_level": "medium",
+  "instruction": "Check that the Rust `codex harness` command can discover this repository harness, list tasks, show model routing, and call the validator.",
+  "setup": [],
+  "verifier": ["python3 .codex/harness/scripts/assert_core_harness_cli.py"],
+  "success_criteria": [
+    "`codex harness status --json` returns ok=true.",
+    "The CLI reports at least five eval tasks.",
+    "The router output includes GPT-5.5, Kimi Code, GLM-5.1, and remote writes forbidden.",
+    "`codex harness validate` exits with code 0."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "This task is a direct effect check for the Rust core integration added to codex-rs/cli."
+}

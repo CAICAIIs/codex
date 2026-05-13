@@ -1,0 +1,20 @@
+{
+  "id": "golden-012-mm-smoke-dry-run-command",
+  "title": "Golden 012 multi-model dry-run command",
+  "category": "harness-contract-cli-env",
+  "risk_level": "low",
+  "instruction": "Verify that the GLM dry-run smoke prints endpoint metadata without requiring secrets.",
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_golden_task.py golden-012-mm-smoke-dry-run-command"
+  ],
+  "success_criteria": [
+    "mm_chat_smoke.py glm --dry-run exits 0 and prints only env var names."
+  ],
+  "forbidden_actions": [
+    "Do not use live API keys.",
+    "Do not push.",
+    "Do not write GitHub comments."
+  ],
+  "notes": "Harness contract CLI/environment task 2/5."
+}

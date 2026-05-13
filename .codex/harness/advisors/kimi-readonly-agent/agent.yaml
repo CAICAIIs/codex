@@ -1,0 +1,5 @@
+version: 1
+agent:
+  name: "caicaiis-kimi-readonly-advisor"
+  system_prompt_path: ./system.md
+  tools: []

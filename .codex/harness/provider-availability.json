@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "updated_at": "2026-05-12",
+  "default_runtime_policy": "fail-closed",
+  "rule": "External advisors are read-only and unavailable to default routes until a current live smoke passes in the active environment.",
+  "providers": {
+    "kimi-code": {
+      "status": "live-current-env",
+      "runtime_policy": "requires-current-live-success",
+      "safe_env_vars": ["KIMI_CODE_API_KEY", "KIMI_API_KEY"],
+      "current_evidence": "2026-05-12 zsh -lic environment check found KIMI_CODE_API_KEY/KIMI_API_KEY present, kimi-code /models returned kimi-for-coding, and kimi-cli with the harness no-tool read-only agent produced .codex/harness/runs/2026-05-12_10-08-23-advisor-kimi-cli-request-decoder.json.",
+      "prior_evidence": ".codex/harness/runs/2026-05-11-multimodel-smoke.md records one-time hidden-input live success and zsh-loaded live success for kimi-code /models.",
+      "last_live_success": "2026-05-12T10:09:12+0800 via zsh -lic process env and kimi-cli no-tool advisor; secret was not written to repo files or command lines.",
+      "allowed_when_unavailable": ["dry-run", "docs-only planning"],
+      "forbidden_when_unavailable": [
+        "default advisor route",
+        "shell execution",
+        "file editing",
+        "remote writes"
+      ]
+    },
+    "glm-5.1": {
+      "status": "live-current-env",
+      "runtime_policy": "requires-current-live-success",
+      "safe_env_vars": ["GLM_5_1_API_KEY"],
+      "current_evidence": "2026-05-12 zsh -lic environment check found GLM_5_1_API_KEY present and glm-5.1 chat returned final content after chat_template_kwargs disabled thinking.",
+      "latest_failure": "2026-05-12 later live checks saw one 60s chat timeout, one 90s advisor timeout, and one HTTP 500. Treat GLM as opportunistic and skip it after a single timeout; do not count it as effect proof.",
+      "prior_evidence": ".codex/harness/runs/2026-05-11-multimodel-smoke.md records one-time hidden-input live success and zsh-loaded live success for glm-5.1.",
+      "last_live_success": "2026-05-12T09:16:24+0800 via zsh -lic process env and chat completion artifact; secret was not written to repo files or command lines.",
+      "allowed_when_unavailable": ["dry-run", "docs-only planning"],
+      "forbidden_when_unavailable": [
+        "default advisor route",
+        "shell execution",
+        "file editing",
+        "remote writes"
+      ]
+    }
+  }
+}

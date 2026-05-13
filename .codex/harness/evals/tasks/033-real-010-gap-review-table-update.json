@@ -1,0 +1,22 @@
+{
+  "id": "real-010-gap-review-table-update",
+  "title": "Real 010 gap review table update",
+  "category": "real-feature-bug",
+  "risk_level": "low",
+  "instruction": "In an isolated workspace, update the gap-review table so the real benchmark row is marked completed with evidence.",
+  "workspace_fixture": ".codex/harness/evals/fixtures/real-010-gap-review-table-update",
+  "requires_attempt_evidence": true,
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_real_task.py real-010-gap-review-table-update"
+  ],
+  "success_criteria": [
+    "review.md contains a table row for `Real development benchmark` with status `Completed` and evidence text."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Real feature/bug benchmark task 10/10."
+}

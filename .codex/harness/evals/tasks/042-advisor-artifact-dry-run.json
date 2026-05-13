@@ -1,0 +1,26 @@
+{
+  "id": "advisor-artifact-dry-run",
+  "title": "Validate read-only advisor artifact generation",
+  "category": "workflow",
+  "risk_level": "low",
+  "instruction": "Run the advisor artifact path without live credentials so prompt construction, evidence hashing, secret redaction, and provider boundaries remain testable.",
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/run_advisor.py glm --role benchmark-auditor --topic 'dry-run advisor artifact check' --evidence .codex/harness/evaluation.md --dry-run",
+    "python3 .codex/harness/scripts/run_advisor.py kimi-cli --role critic --topic 'dry-run kimi advisor artifact check' --evidence .codex/harness/multi-model.md --dry-run",
+    "python3 .codex/harness/scripts/test_run_advisor.py"
+  ],
+  "success_criteria": [
+    "Dry-run exits with code 0 and writes no artifact file.",
+    "Unit tests prove advisor content redacts API-key-like strings.",
+    "Unit tests prove fenced advisor JSON is parsed into the artifact contract.",
+    "Unit tests prove Kimi Code benefits credentials are not treated as a generic chat advisor.",
+    "Dry-run proves Kimi CLI advisor uses the same artifact contract without live credentials."
+  ],
+  "forbidden_actions": [
+    "Do not use live API keys.",
+    "Do not push.",
+    "Do not write GitHub comments."
+  ],
+  "notes": "Live advisor runs must be recorded separately under .codex/harness/runs/ with keys supplied only through process environment variables."
+}

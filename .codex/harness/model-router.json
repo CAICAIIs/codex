@@ -1,0 +1,159 @@
+{
+  "$schema": "./model-router.schema.json",
+  "version": 1,
+  "updated_at": "2026-05-12",
+  "default_language": "zh-CN",
+  "principles": [
+    "默认单主模型，多模型只在能提供独立证据时介入。",
+    "外置模型默认只读，不直接改文件、不执行 shell、不做远程写入。",
+    "任何新增路由必须先赢过 baseline，或者明确降低风险、人工介入、恢复成本。",
+    "打不过 baseline 的 prompt、skill、agent 或路由规则要删除，不靠调参续命。"
+  ],
+  "models": {
+    "gpt-5.5": {
+      "role": "lead",
+      "default_effort": "high",
+      "allowed_actions": ["read", "edit", "test", "commit-local"],
+      "best_for": [
+        "主实现",
+        "复杂调试",
+        "跨模块设计",
+        "最终整合",
+        "高风险安全判断"
+      ],
+      "known_limits": [
+        "长输出可能难读，需要用中文 brief 压缩给用户。",
+        "不能用强模型替代可执行验证。"
+      ]
+    },
+    "kimi-code": {
+      "role": "coding-advisor",
+      "default_model": "kimi-for-coding",
+      "endpoint": "https://api.kimi.com/coding/v1",
+      "allowed_actions": ["read", "advise"],
+      "best_for": ["代码定位建议", "中文需求解释", "批量只读阅读建议"],
+      "known_limits": [
+        "Kimi Code benefits key 不是通用 Moonshot Chat Completions key。",
+        "默认 advisor artifact 通过 kimi-cli + .codex/harness/advisors/kimi-readonly-agent/agent.yaml 运行，agent tools 必须为空。",
+        "不要伪造客户端标识或绕过端点限制。",
+        "稳定模型名可能映射到后端新模型，评测记录要保留日期和返回模型。"
+      ]
+    },
+    "glm-5.1": {
+      "role": "long-run-critic",
+      "default_model": "glm-5.1",
+      "allowed_actions": ["read", "advise"],
+      "best_for": ["长程反方审查", "benchmark 结果复核", "复杂失败分类"],
+      "known_limits": [
+        "第三方兼容端点稳定性必须先通过 smoke。",
+        "长程任务必须有 stop-loss，不能无限等待。",
+        "若最近一次 GLM advisor 或 chat smoke 超时/500，当前任务直接跳过 GLM，改用 GPT reviewer 或 Kimi 只读 artifact。"
+      ]
+    },
+    "gpt-5.4-high": {
+      "role": "reviewer",
+      "default_effort": "high",
+      "allowed_actions": ["read", "advise"],
+      "best_for": ["只读 code review", "计划反方审查", "评测审计"],
+      "known_limits": ["review 结论必须引用 diff、命令、日志或外部来源。"]
+    }
+  },
+  "routes": [
+    {
+      "id": "simple-local-change",
+      "enabled": true,
+      "when": "小功能、小 bug、影响范围清楚、验收命令明确。",
+      "lead": "gpt-5.5",
+      "advisors": [],
+      "required_artifacts": ["需求解码卡", "最窄验证命令", "diff 自查"],
+      "budget": {
+        "max_wall_minutes": 30,
+        "max_review_rounds": 1,
+        "max_human_interventions": 0
+      },
+      "stop_loss": ["最窄验证连续失败 2 次", "验收 oracle 不明"]
+    },
+    {
+      "id": "unclear-request",
+      "enabled": true,
+      "when": "用户说看不懂需求、issue、别人发来的任务，或需求有隐藏产品决策。",
+      "lead": "gpt-5.5",
+      "advisors": ["kimi-code"],
+      "required_artifacts": ["中文需求解码卡", "最多 3 个确认点", "推荐动作"],
+      "budget": {
+        "max_wall_minutes": 20,
+        "max_review_rounds": 1,
+        "max_human_interventions": 1
+      },
+      "stop_loss": [
+        "出现两个以上互斥解释",
+        "无法推断验收方式",
+        "外置 advisor 没有当前 live success"
+      ]
+    },
+    {
+      "id": "risky-plan-or-large-change",
+      "enabled": true,
+      "when": "跨模块、状态机、权限、安全、迁移、性能或长期维护风险较高。",
+      "lead": "gpt-5.5",
+      "advisors": ["gpt-5.4-high", "glm-5.1"],
+      "required_artifacts": [
+        "OpenSpec 或等价计划",
+        "反方审查",
+        "采纳/拒绝记录",
+        "验证矩阵"
+      ],
+      "budget": {
+        "max_wall_minutes": 120,
+        "max_review_rounds": 3,
+        "max_human_interventions": 2
+      },
+      "stop_loss": [
+        "reviewer 阻塞项未处理",
+        "缺少 baseline",
+        "外置 advisor 没有当前 live success",
+        "GLM advisor 单次超时或 500",
+        "远程写入未获当前确认"
+      ]
+    },
+    {
+      "id": "workflow-evaluation",
+      "enabled": true,
+      "when": "优化 skill、harness、多模型路由、评测方法或 Codex 工作流本身。",
+      "lead": "gpt-5.5",
+      "advisors": ["gpt-5.4-high", "glm-5.1"],
+      "required_artifacts": [
+        "baseline",
+        "variant",
+        "pass/fail",
+        "成本",
+        "失败分类",
+        "安全红队结果"
+      ],
+      "budget": {
+        "max_wall_minutes": 240,
+        "max_review_rounds": 4,
+        "max_human_interventions": 1
+      },
+      "stop_loss": [
+        "没有可复现任务集",
+        "没有单模型 baseline",
+        "外置 advisor 没有当前 live success",
+        "GLM advisor 单次超时或 500",
+        "新增流程使结果更难审"
+      ]
+    }
+  ],
+  "remote_write_policy": {
+    "default": "forbid",
+    "requires_current_conversation_confirmation": [
+      "git push",
+      "gh issue comment",
+      "gh pr comment",
+      "gh pr review",
+      "merge",
+      "tag",
+      "release"
+    ]
+  }
+}

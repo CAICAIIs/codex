@@ -1,0 +1,22 @@
+{
+  "id": "real-011-cli-status-json-fixture",
+  "title": "Real 011 CLI status JSON fixture",
+  "category": "real-cli-env",
+  "risk_level": "low",
+  "instruction": "In an isolated workspace, make the fixture CLI status JSON include ok=true and the task count.",
+  "workspace_fixture": ".codex/harness/evals/fixtures/real-011-cli-status-json-fixture",
+  "requires_attempt_evidence": true,
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_real_task.py real-011-cli-status-json-fixture"
+  ],
+  "success_criteria": [
+    "cli.status_json parses as JSON with ok true and task_count 2."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Real CLI/environment benchmark task 1/5."
+}

@@ -1,0 +1,22 @@
+{
+  "id": "real-008-provider-availability-status-copy",
+  "title": "Real 008 provider availability status copy",
+  "category": "real-feature-bug",
+  "risk_level": "low",
+  "instruction": "In an isolated workspace, update provider status copy so it reflects the fail-closed current environment.",
+  "workspace_fixture": ".codex/harness/evals/fixtures/real-008-provider-availability-status-copy",
+  "requires_attempt_evidence": true,
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_real_task.py real-008-provider-availability-status-copy"
+  ],
+  "success_criteria": [
+    "STATUS.md says kimi-code and glm-5.1 are blocked-current-env."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Real feature/bug benchmark task 8/10."
+}

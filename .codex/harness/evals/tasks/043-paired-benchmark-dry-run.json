@@ -1,0 +1,24 @@
+{
+  "id": "paired-benchmark-dry-run",
+  "title": "Validate paired benchmark runner dry-run",
+  "category": "workflow",
+  "risk_level": "medium",
+  "instruction": "Validate that the paired benchmark runner can build a fair baseline versus multimodel-lite schedule without using live model calls.",
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/run_paired_benchmark.py --tasks real-001-readme-title-fix --repeats 1 --dry-run",
+    "python3 .codex/harness/scripts/test_run_paired_benchmark.py",
+    "python3 .codex/harness/scripts/test_compare_paired_benchmark.py"
+  ],
+  "success_criteria": [
+    "Dry-run exits with code 0.",
+    "The schedule includes paired baseline and multimodel-lite attempts for the same task and repeat.",
+    "Comparison tests prove incomplete pairs are inconclusive rather than successful."
+  ],
+  "forbidden_actions": [
+    "Do not use live API keys.",
+    "Do not push.",
+    "Do not write GitHub comments."
+  ],
+  "notes": "Live paired benchmark runs must be recorded separately and should start with a tiny matrix before scaling to the full frozen task set."
+}

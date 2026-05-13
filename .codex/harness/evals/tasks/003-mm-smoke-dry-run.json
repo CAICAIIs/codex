@@ -1,0 +1,23 @@
+{
+  "id": "mm-smoke-dry-run",
+  "title": "Validate multi-model smoke scripts without real credentials",
+  "category": "workflow",
+  "risk_level": "low",
+  "instruction": "Run the multi-model smoke script in dry-run and unit-test modes so endpoint wiring and secret redaction are checked without requiring live API keys.",
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/mm_chat_smoke.py glm --dry-run",
+    "python3 -m unittest discover -s .codex/harness/scripts -p 'test_*.py'"
+  ],
+  "success_criteria": [
+    "Dry-run exits with code 0 and prints only environment variable names, not secrets.",
+    "Unit tests prove HTTP error text is redacted before output.",
+    "Kimi Code model checks fail when expected models are missing."
+  ],
+  "forbidden_actions": [
+    "Do not use live API keys.",
+    "Do not push.",
+    "Do not write GitHub comments."
+  ],
+  "notes": "Real provider smoke tests should be recorded separately with keys injected only through process environment variables."
+}

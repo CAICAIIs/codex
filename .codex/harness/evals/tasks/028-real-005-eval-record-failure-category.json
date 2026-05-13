@@ -1,0 +1,22 @@
+{
+  "id": "real-005-eval-record-failure-category",
+  "title": "Real 005 eval record failure category",
+  "category": "real-feature-bug",
+  "risk_level": "low",
+  "instruction": "In an isolated workspace, preserve failure_category on failed eval records while clearing it for passed records.",
+  "workspace_fixture": ".codex/harness/evals/fixtures/real-005-eval-record-failure-category",
+  "requires_attempt_evidence": true,
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_real_task.py real-005-eval-record-failure-category"
+  ],
+  "success_criteria": [
+    "build_record('failed', 'timeout') records timeout, and build_record('passed', 'timeout') records no failure category."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Real feature/bug benchmark task 5/10."
+}

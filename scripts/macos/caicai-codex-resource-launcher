@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export CAICAI_CODEX_REPO="${CAICAI_CODEX_REPO:-/Users/caicaiis/Documents/github/codex}"
+export CAICAI_CODEX_HOME="${CAICAI_CODEX_HOME:-$HOME/.codex}"
+exec "$CAICAI_CODEX_REPO/scripts/caicodex" "$@"

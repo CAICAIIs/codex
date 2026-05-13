@@ -1,0 +1,20 @@
+{
+  "id": "golden-002-router-fail-closed-contract",
+  "title": "Golden 002 router availability contract",
+  "category": "harness-contract-feature",
+  "risk_level": "medium",
+  "instruction": "Verify that current live external advisors enable their read-only default routes in router JSON output.",
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_golden_task.py golden-002-router-fail-closed-contract"
+  ],
+  "success_criteria": [
+    "router --json shows advisor routes enabled and Kimi/GLM availability as live-current-env."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Harness contract feature task 2/10."
+}

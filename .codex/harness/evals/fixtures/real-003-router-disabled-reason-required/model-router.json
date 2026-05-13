@@ -1,0 +1,12 @@
+{
+  "routes": [
+    {
+      "id": "simple-local-change",
+      "enabled": true
+    },
+    {
+      "id": "blocked-advisor",
+      "enabled": false
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "real-014-setup-command-creates-artifact",
+  "title": "Real 014 setup command creates artifact",
+  "category": "real-cli-env",
+  "risk_level": "low",
+  "instruction": "In an isolated workspace, fix setup.py so the artifact mode creates artifact.txt with the expected content.",
+  "workspace_fixture": ".codex/harness/evals/fixtures/real-014-setup-command-creates-artifact",
+  "requires_attempt_evidence": true,
+  "setup": ["cd \"$CODEX_HARNESS_WORKSPACE\" && python3 setup.py --prepare"],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_real_task.py real-014-setup-command-creates-artifact"
+  ],
+  "success_criteria": [
+    "python3 setup.py --artifact creates artifact.txt containing `setup artifact ready`."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Real CLI/environment benchmark task 4/5."
+}

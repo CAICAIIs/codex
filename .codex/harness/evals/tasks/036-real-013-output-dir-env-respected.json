@@ -1,0 +1,22 @@
+{
+  "id": "real-013-output-dir-env-respected",
+  "title": "Real 013 output dir env respected",
+  "category": "real-cli-env",
+  "risk_level": "low",
+  "instruction": "In an isolated workspace, make output_dir respect CODEX_HARNESS_OUTPUT_DIR when it is set.",
+  "workspace_fixture": ".codex/harness/evals/fixtures/real-013-output-dir-env-respected",
+  "requires_attempt_evidence": true,
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_real_task.py real-013-output-dir-env-respected"
+  ],
+  "success_criteria": [
+    "output.output_dir returns the CODEX_HARNESS_OUTPUT_DIR value when the env var is set."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Real CLI/environment benchmark task 3/5."
+}

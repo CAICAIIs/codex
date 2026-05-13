@@ -1,0 +1,22 @@
+{
+  "id": "real-015-timeout-records-failure",
+  "title": "Real 015 timeout records failure",
+  "category": "real-cli-env",
+  "risk_level": "low",
+  "instruction": "In an isolated workspace, make timeout record generation mark timed-out commands as failed.",
+  "workspace_fixture": ".codex/harness/evals/fixtures/real-015-timeout-records-failure",
+  "requires_attempt_evidence": true,
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_real_task.py real-015-timeout-records-failure"
+  ],
+  "success_criteria": [
+    "record_timeout returns status failed, exit_code 124, and failure_category timeout."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Real CLI/environment benchmark task 5/5."
+}

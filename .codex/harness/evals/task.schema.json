@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CAICAIIs Codex Harness Eval Task",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "category",
+    "risk_level",
+    "instruction",
+    "setup",
+    "verifier",
+    "success_criteria",
+    "forbidden_actions"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]{2,80}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 3
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "feature",
+        "bugfix",
+        "cli",
+        "debug",
+        "security",
+        "workflow",
+        "docs",
+        "harness-contract-feature",
+        "harness-contract-cli-env",
+        "harness-contract-security",
+        "harness-contract-workflow",
+        "harness-contract-docs",
+        "real-feature-bug",
+        "real-cli-env",
+        "real-security"
+      ]
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    },
+    "instruction": {
+      "type": "string",
+      "minLength": 20
+    },
+    "setup": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "verifier": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "success_criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "forbidden_actions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "workspace_fixture": {
+      "type": "string",
+      "pattern": "^\\.codex/harness/evals/fixtures/[a-z0-9][a-z0-9_-]{2,80}$"
+    },
+    "requires_attempt_evidence": {
+      "type": "boolean"
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,457 @@
+#!/usr/bin/env python3
+"""Small declarative hook rules for CAICAI Codex.
+
+This intentionally compiles to the existing Codex hooks.json format instead of
+introducing another runtime hook path.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+
+RULES_VERSION = 1
+SUPPORTED_EVENTS = {"bash", "tool", "prompt", "stop", "all"}
+SUPPORTED_ACTIONS = {"warn", "block"}
+
+
+class HookifyError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class Target:
+    root: Path
+    rules_path: Path
+    hooks_path: Path
+
+
+def run_git(args: list[str], cwd: Path) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        check=True,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return result.stdout
+
+
+def find_root(start: Path) -> Path:
+    try:
+        return Path(run_git(["rev-parse", "--show-toplevel"], start).strip()).resolve()
+    except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        raise HookifyError("caicodex hookify requires a git repository") from exc
+
+
+def target_from_args(args: argparse.Namespace) -> Target:
+    root = Path(args.root).expanduser().resolve() if args.root else find_root(Path.cwd())
+    return Target(
+        root=root,
+        rules_path=root / ".codex" / "hookify" / "rules.json",
+        hooks_path=root / ".codex" / "hooks.json",
+    )
+
+
+def empty_rules() -> dict[str, Any]:
+    return {"version": RULES_VERSION, "rules": []}
+
+
+def load_rules(target: Target) -> dict[str, Any]:
+    if not target.rules_path.exists():
+        return empty_rules()
+    try:
+        data = json.loads(target.rules_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise HookifyError(f"invalid rules JSON: {target.rules_path}: {exc}") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("rules"), list):
+        raise HookifyError(f"invalid rules file shape: {target.rules_path}")
+    return data
+
+
+def save_rules(target: Target, data: dict[str, Any]) -> None:
+    target.rules_path.parent.mkdir(parents=True, exist_ok=True)
+    target.rules_path.write_text(
+        json.dumps(data, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def validate_rule(rule: dict[str, Any]) -> None:
+    name = rule.get("name")
+    if not isinstance(name, str) or not name:
+        raise HookifyError("rule name must be a non-empty string")
+    event = rule.get("event")
+    if event not in SUPPORTED_EVENTS:
+        raise HookifyError(f"rule {name}: event must be one of {sorted(SUPPORTED_EVENTS)}")
+    action = rule.get("action")
+    if action not in SUPPORTED_ACTIONS:
+        raise HookifyError(f"rule {name}: action must be one of {sorted(SUPPORTED_ACTIONS)}")
+    pattern = rule.get("pattern")
+    if not isinstance(pattern, str) or not pattern:
+        raise HookifyError(f"rule {name}: pattern must be a non-empty regex")
+    try:
+        re.compile(pattern)
+    except re.error as exc:
+        raise HookifyError(f"rule {name}: invalid regex: {exc}") from exc
+    message = rule.get("message")
+    if not isinstance(message, str) or not message.strip():
+        raise HookifyError(f"rule {name}: message must be non-empty")
+
+
+def load_hooks(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"hooks": {}}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise HookifyError(f"invalid hooks JSON: {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise HookifyError(f"invalid hooks JSON shape: {path}")
+    hooks = data.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        raise HookifyError(f"invalid hooks map: {path}")
+    return data
+
+
+def command_already_present(groups: list[Any], command: str) -> bool:
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        for hook in group.get("hooks", []):
+            if isinstance(hook, dict) and hook.get("command") == command:
+                return True
+    return False
+
+
+def is_managed_hookify_command(value: Any, script: Path) -> bool:
+    if not isinstance(value, str):
+        return False
+    quoted = shlex.quote(str(script))
+    unquoted = str(script)
+    return (
+        value == f"{quoted} run"
+        or value.startswith(f"{quoted} run ")
+        or value == f"{unquoted} run"
+        or value.startswith(f"{unquoted} run ")
+    )
+
+
+def prune_managed_hooks(data: dict[str, Any], script: Path) -> None:
+    hooks = data.setdefault("hooks", {})
+    for event, groups in list(hooks.items()):
+        if not isinstance(groups, list):
+            continue
+        pruned_groups = []
+        for group in groups:
+            if not isinstance(group, dict):
+                pruned_groups.append(group)
+                continue
+            handlers = group.get("hooks")
+            if not isinstance(handlers, list):
+                pruned_groups.append(group)
+                continue
+            remaining = [
+                hook
+                for hook in handlers
+                if not (isinstance(hook, dict) and is_managed_hookify_command(hook.get("command"), script))
+            ]
+            if remaining:
+                updated = dict(group)
+                updated["hooks"] = remaining
+                pruned_groups.append(updated)
+            elif len(remaining) == len(handlers):
+                pruned_groups.append(group)
+        hooks[event] = pruned_groups
+
+
+def append_hook(data: dict[str, Any], event: str, matcher: str | None, command: str) -> None:
+    hooks = data.setdefault("hooks", {})
+    groups = hooks.setdefault(event, [])
+    if not isinstance(groups, list):
+        raise HookifyError(f"hooks.{event} must be a list")
+    if command_already_present(groups, command):
+        return
+    group: dict[str, Any] = {
+        "hooks": [
+            {
+                "type": "command",
+                "command": command,
+                "timeout": 5,
+                "statusMessage": "caicodex hookify",
+            }
+        ]
+    }
+    if matcher is not None:
+        group["matcher"] = matcher
+    groups.append(group)
+
+
+def compile_hooks(target: Target) -> None:
+    data = load_rules(target)
+    rules = [rule for rule in data.get("rules", []) if rule.get("enabled", True)]
+    for rule in rules:
+        validate_rule(rule)
+
+    hooks = load_hooks(target.hooks_path)
+    script = Path(__file__).resolve()
+    command = f"{shlex.quote(str(script))} run --root {shlex.quote(str(target.root))}"
+    prune_managed_hooks(hooks, script)
+
+    if any(rule["event"] in {"bash", "tool", "all"} for rule in rules):
+        append_hook(hooks, "PreToolUse", "*", command)
+    if any(rule["event"] in {"prompt", "all"} for rule in rules):
+        append_hook(hooks, "UserPromptSubmit", None, command)
+    if any(rule["event"] in {"stop", "all"} for rule in rules):
+        append_hook(hooks, "Stop", None, command)
+
+    target.hooks_path.parent.mkdir(parents=True, exist_ok=True)
+    target.hooks_path.write_text(json.dumps(hooks, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def add_rule(args: argparse.Namespace) -> None:
+    target = target_from_args(args)
+    data = load_rules(target)
+    rules = data.setdefault("rules", [])
+    rule = {
+        "name": args.name,
+        "enabled": True,
+        "event": args.event,
+        "pattern": args.pattern,
+        "action": args.action,
+        "message": args.message,
+    }
+    validate_rule(rule)
+    rules[:] = [existing for existing in rules if existing.get("name") != args.name]
+    rules.append(rule)
+    save_rules(target, data)
+    if not args.no_compile:
+        compile_hooks(target)
+    print(f"added rule: {args.name}")
+
+
+def remove_rule(args: argparse.Namespace) -> None:
+    target = target_from_args(args)
+    data = load_rules(target)
+    before = len(data.get("rules", []))
+    data["rules"] = [rule for rule in data.get("rules", []) if rule.get("name") != args.name]
+    if len(data["rules"]) == before:
+        raise HookifyError(f"rule not found: {args.name}")
+    save_rules(target, data)
+    if not args.no_compile:
+        compile_hooks(target)
+    print(f"removed rule: {args.name}")
+
+
+def set_enabled(args: argparse.Namespace, enabled: bool) -> None:
+    target = target_from_args(args)
+    data = load_rules(target)
+    for rule in data.get("rules", []):
+        if rule.get("name") == args.name:
+            rule["enabled"] = enabled
+            save_rules(target, data)
+            if not args.no_compile:
+                compile_hooks(target)
+            print(f"{'enabled' if enabled else 'disabled'} rule: {args.name}")
+            return
+    raise HookifyError(f"rule not found: {args.name}")
+
+
+def list_rules(args: argparse.Namespace) -> None:
+    target = target_from_args(args)
+    data = load_rules(target)
+    if args.json:
+        print(json.dumps(data, indent=2, sort_keys=True))
+        return
+    for rule in data.get("rules", []):
+        state = "enabled" if rule.get("enabled", True) else "disabled"
+        print(
+            f"{rule.get('name')} [{state}] event={rule.get('event')} "
+            f"action={rule.get('action')} pattern={rule.get('pattern')}"
+        )
+
+
+def defaults(args: argparse.Namespace) -> None:
+    target = target_from_args(args)
+    data = load_rules(target)
+    rules = data.setdefault("rules", [])
+    defaults_to_add = [
+        {
+            "name": "block-dangerous-rm",
+            "enabled": True,
+            "event": "bash",
+            "pattern": r"(^|[;&|]\s*)rm\s+-rf\s+(/|~|\$HOME|\*)",
+            "action": "block",
+            "message": "Blocked dangerous rm -rf target. Use a narrower, reviewed path.",
+        },
+        {
+            "name": "block-codex-branch",
+            "enabled": True,
+            "event": "bash",
+            "pattern": (
+                r"\bgit\s+switch\s+-c\s+codex/"
+                r"|\bgit\s+checkout\s+-[bc]\s+codex/"
+                r"|\bgit\s+branch\s+codex/"
+                r"|\bgit\s+update-ref\s+refs/heads/codex/"
+            ),
+            "action": "block",
+            "message": "Blocked codex/ branch creation. Use caicai/, feature/, fix/, or task/.",
+        },
+    ]
+    by_name = {rule.get("name"): rule for rule in rules}
+    for rule in defaults_to_add:
+        validate_rule(rule)
+        by_name[rule["name"]] = rule
+    data["rules"] = list(by_name.values())
+    save_rules(target, data)
+    if not args.no_compile:
+        compile_hooks(target)
+    print("installed default hookify rules")
+
+
+def hook_text_for_rule(rule: dict[str, Any], payload: dict[str, Any]) -> str | None:
+    event = rule.get("event")
+    hook_event = payload.get("hook_event_name")
+    if event == "all":
+        return json.dumps(payload, sort_keys=True)
+    if event == "prompt" and hook_event == "UserPromptSubmit":
+        return str(payload.get("prompt", ""))
+    if event == "stop" and hook_event == "Stop":
+        return str(payload.get("last_assistant_message", ""))
+    if hook_event != "PreToolUse":
+        return None
+    if event == "tool":
+        return json.dumps(payload.get("tool_input", {}), sort_keys=True)
+    if event == "bash":
+        tool_name = str(payload.get("tool_name", ""))
+        if tool_name != "Bash":
+            return None
+        tool_input = payload.get("tool_input", {})
+        if isinstance(tool_input, dict):
+            command = tool_input.get("command")
+            if isinstance(command, list):
+                return " ".join(str(part) for part in command)
+            if command is not None:
+                return str(command)
+        return json.dumps(tool_input, sort_keys=True)
+    return None
+
+
+def matched_rules(rules: list[dict[str, Any]], payload: dict[str, Any]) -> list[dict[str, Any]]:
+    matches = []
+    for rule in rules:
+        if not rule.get("enabled", True):
+            continue
+        validate_rule(rule)
+        text = hook_text_for_rule(rule, payload)
+        if text is None:
+            continue
+        if re.search(rule["pattern"], text, flags=re.MULTILINE):
+            matches.append(rule)
+    return matches
+
+
+def output_for_matches(matches: list[dict[str, Any]], payload: dict[str, Any]) -> dict[str, Any]:
+    blocks = [rule for rule in matches if rule.get("action") == "block"]
+    selected = blocks or matches
+    message = "\n".join(f"{rule['name']}: {rule['message']}" for rule in selected[:5])
+    hook_event = payload.get("hook_event_name")
+
+    if blocks and hook_event == "PreToolUse":
+        return {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": message,
+            }
+        }
+    if blocks and hook_event in {"UserPromptSubmit", "Stop"}:
+        return {"decision": "block", "reason": message}
+    return {"systemMessage": f"caicodex hookify warning:\n{message}"}
+
+
+def run_hook(args: argparse.Namespace) -> None:
+    target = target_from_args(args)
+    raw = sys.stdin.read()
+    if not raw.strip():
+        return
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HookifyError(f"invalid hook stdin JSON: {exc}") from exc
+    data = load_rules(target)
+    matches = matched_rules(data.get("rules", []), payload)
+    if not matches:
+        return
+    print(json.dumps(output_for_matches(matches, payload), sort_keys=True))
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="CAICAI Codex hookify-lite rules")
+    parser.add_argument("--root", help="target git repository root")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    add = sub.add_parser("add", help="add or replace a rule")
+    add.add_argument("name")
+    add.add_argument("--event", required=True, choices=sorted(SUPPORTED_EVENTS))
+    add.add_argument("--pattern", required=True)
+    add.add_argument("--action", default="warn", choices=sorted(SUPPORTED_ACTIONS))
+    add.add_argument("--message", required=True)
+    add.add_argument("--no-compile", action="store_true")
+    add.set_defaults(func=add_rule)
+
+    remove = sub.add_parser("remove", help="remove a rule")
+    remove.add_argument("name")
+    remove.add_argument("--no-compile", action="store_true")
+    remove.set_defaults(func=remove_rule)
+
+    enable = sub.add_parser("enable", help="enable a rule")
+    enable.add_argument("name")
+    enable.add_argument("--no-compile", action="store_true")
+    enable.set_defaults(func=lambda args: set_enabled(args, True))
+
+    disable = sub.add_parser("disable", help="disable a rule")
+    disable.add_argument("name")
+    disable.add_argument("--no-compile", action="store_true")
+    disable.set_defaults(func=lambda args: set_enabled(args, False))
+
+    list_cmd = sub.add_parser("list", help="list rules")
+    list_cmd.add_argument("--json", action="store_true")
+    list_cmd.set_defaults(func=list_rules)
+
+    defaults_cmd = sub.add_parser("defaults", help="install conservative default rules")
+    defaults_cmd.add_argument("--no-compile", action="store_true")
+    defaults_cmd.set_defaults(func=defaults)
+
+    compile_cmd = sub.add_parser("compile", help="compile rules into .codex/hooks.json")
+    compile_cmd.set_defaults(func=lambda args: (compile_hooks(target_from_args(args)), print("compiled hookify hooks")))
+
+    run = sub.add_parser("run", help="run as a Codex hook command")
+    run.set_defaults(func=run_hook)
+
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    try:
+        args.func(args)
+        return 0
+    except HookifyError as exc:
+        print(f"caicodex-hookify: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

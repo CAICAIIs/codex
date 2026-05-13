@@ -1,0 +1,22 @@
+{
+  "id": "real-007-readme-command-refresh",
+  "title": "Real 007 README command refresh",
+  "category": "real-feature-bug",
+  "risk_level": "low",
+  "instruction": "In an isolated workspace, refresh README command examples so router JSON and validate are both documented.",
+  "workspace_fixture": ".codex/harness/evals/fixtures/real-007-readme-command-refresh",
+  "requires_attempt_evidence": true,
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_real_task.py real-007-readme-command-refresh"
+  ],
+  "success_criteria": [
+    "README.md mentions `codex harness router --json` and `codex harness validate`."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Real feature/bug benchmark task 7/10."
+}

@@ -1,0 +1,18 @@
+{
+  "id": "golden-013-python-units-command",
+  "title": "Golden 013 Python units command",
+  "category": "harness-contract-cli-env",
+  "risk_level": "low",
+  "instruction": "Verify that harness Python unit tests pass.",
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_golden_task.py golden-013-python-units-command"
+  ],
+  "success_criteria": ["Python unittest discovery exits 0."],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Harness contract CLI/environment task 3/5."
+}

@@ -1,0 +1,20 @@
+{
+  "id": "golden-001-core-status-contract",
+  "title": "Golden 001 core harness status contract",
+  "category": "harness-contract-feature",
+  "risk_level": "low",
+  "instruction": "Verify that the compiled Codex harness reports a healthy local harness with current live advisor route count.",
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_golden_task.py golden-001-core-status-contract"
+  ],
+  "success_criteria": [
+    "status --json returns ok=true, at least 23 tasks, and exactly one enabled route."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Harness contract feature task 1/10."
+}

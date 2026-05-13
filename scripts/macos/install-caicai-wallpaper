@@ -1,0 +1,437 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_PATH="${CAICAI_CODEX_APP:-$HOME/Applications/CAICAI Codex.app}"
+IMAGE_PATH="${CAICAI_CODEX_WALLPAPER_IMAGE:-$HOME/Desktop/Picture/nijika.jpg}"
+MODE="enable"
+SIGN_APP=1
+
+usage() {
+  cat <<'EOF'
+install-caicai-wallpaper - patch CAICAI Codex.app with a subtle back wallpaper
+
+Usage:
+  install-caicai-wallpaper [on|enable] [--image <jpg>] [--app <app>]
+  install-caicai-wallpaper off|disable [--app <app>]
+  install-caicai-wallpaper status [--app <app>]
+
+Options:
+  --image <path>   Wallpaper image. Defaults to ~/Desktop/Picture/nijika.jpg.
+  --app <path>     App bundle. Defaults to ~/Applications/CAICAI Codex.app.
+  --skip-sign      Do not ad-hoc re-sign the patched app.
+  -h, --help       Show this help.
+
+The script only touches the personal CAICAI Codex.app bundle. It does not
+modify /Applications/Codex.app and does not write any remote state.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    on|enable|install)
+      MODE="enable"
+      shift
+      ;;
+    off|disable|remove)
+      MODE="disable"
+      shift
+      ;;
+    status)
+      MODE="status"
+      shift
+      ;;
+    --image)
+      IMAGE_PATH="${2:-}"
+      if [[ -z "$IMAGE_PATH" ]]; then
+        echo "install-caicai-wallpaper: --image requires a path" >&2
+        exit 2
+      fi
+      shift 2
+      ;;
+    --app)
+      APP_PATH="${2:-}"
+      if [[ -z "$APP_PATH" ]]; then
+        echo "install-caicai-wallpaper: --app requires a path" >&2
+        exit 2
+      fi
+      shift 2
+      ;;
+    --skip-sign)
+      SIGN_APP=0
+      shift
+      ;;
+    -h|--help|help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "install-caicai-wallpaper: unknown argument: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+RESOURCES_DIR="$APP_PATH/Contents/Resources"
+ASAR_PATH="$RESOURCES_DIR/app.asar"
+ASAR_UNPACKED_PATH="$RESOURCES_DIR/app.asar.unpacked"
+BACKUP_PATH="$RESOURCES_DIR/app.asar.caicai-wallpaper-backup"
+MANIFEST_PATH="$RESOURCES_DIR/caicai-wallpaper.json"
+CSS_ASSET="webview/assets/caicai-wallpaper.css"
+IMAGE_ASSET="webview/assets/caicai-wallpaper.jpg"
+APP_DISPLAY_NAME="CAICAI Codex"
+
+need_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "install-caicai-wallpaper: missing command: $1" >&2
+    exit 127
+  fi
+}
+
+need_app() {
+  if [[ ! -d "$APP_PATH" ]]; then
+    echo "install-caicai-wallpaper: missing app bundle: $APP_PATH" >&2
+    exit 127
+  fi
+  if [[ ! -f "$ASAR_PATH" ]]; then
+    echo "install-caicai-wallpaper: missing app.asar: $ASAR_PATH" >&2
+    exit 127
+  fi
+}
+
+run_asar() {
+  (
+    cd /tmp
+    npm_config_loglevel=error npx --yes @electron/asar "$@"
+  )
+}
+
+asar_has_asset() {
+  run_asar list "$ASAR_PATH" | grep -qx "/$1"
+}
+
+status() {
+  need_app
+  local css="missing"
+  local image="missing"
+  if asar_has_asset "$CSS_ASSET"; then
+    css="installed"
+  fi
+  if asar_has_asset "$IMAGE_ASSET"; then
+    image="installed"
+  fi
+
+  echo "app:       $APP_PATH"
+  echo "css:       $css"
+  echo "wallpaper: $image"
+  if [[ -f "$MANIFEST_PATH" ]]; then
+    echo "manifest:  $MANIFEST_PATH"
+  fi
+  if [[ -f "$BACKUP_PATH" ]]; then
+    echo "backup:    $BACKUP_PATH"
+  fi
+}
+
+write_wallpaper_css() {
+  local css_path="$1"
+  cat >"$css_path" <<'CSS'
+/* CAICAI personal wallpaper patch. Keep this file small and easy to remove. */
+html[data-codex-window-type="electron"] {
+  background: #0d0d0d !important;
+}
+
+html[data-codex-window-type="electron"] body,
+.startup-loader {
+  background:
+    radial-gradient(circle at 18% 12%, rgb(255 255 255 / 0.12), transparent 26%),
+    radial-gradient(circle at 84% 76%, rgb(255 190 80 / 0.10), transparent 30%),
+    linear-gradient(180deg, rgb(0 0 0 / 0.50), rgb(0 0 0 / 0.74)),
+    url("./caicai-wallpaper.jpg") center center / cover no-repeat fixed !important;
+}
+
+html[data-codex-window-type="electron"] body {
+  background-color: #0d0d0d !important;
+}
+
+html[data-codex-window-type="electron"] #root {
+  background: transparent !important;
+}
+
+html[data-codex-window-type="electron"] .app-header-tint {
+  background-color: rgb(10 10 10 / 0.30) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.05);
+  backdrop-filter: blur(18px) saturate(1.05);
+}
+
+html[data-codex-window-type="electron"] .main-surface {
+  background-color: rgb(18 18 18 / 0.90) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+@supports (background-color: color-mix(in srgb, black 50%, transparent)) {
+  html[data-codex-window-type="electron"] .main-surface {
+    background-color: color-mix(
+      in srgb,
+      var(--color-token-main-surface-primary) 90%,
+      transparent
+    ) !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html[data-codex-window-type="electron"] body,
+  .startup-loader {
+    background: var(--color-token-editor-background, #0d0d0d) !important;
+  }
+
+  html[data-codex-window-type="electron"] .app-header-tint,
+  html[data-codex-window-type="electron"] .main-surface {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+CSS
+}
+
+patch_index_enable() {
+  local index_path="$1"
+  python3 - "$index_path" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+begin = "    <!-- CAICAI_WALLPAPER_BEGIN -->\n"
+end = "    <!-- CAICAI_WALLPAPER_END -->\n"
+
+while begin in text and end in text:
+    start = text.index(begin)
+    stop = text.index(end, start) + len(end)
+    text = text[:start] + text[stop:]
+
+block = (
+    begin
+    + '    <link rel="stylesheet" href="./assets/caicai-wallpaper.css" />\n'
+    + end
+)
+needle = "</head>"
+if needle not in text:
+    raise SystemExit("index.html is missing </head>")
+path.write_text(text.replace(needle, block + needle, 1))
+PY
+}
+
+patch_index_disable() {
+  local index_path="$1"
+  python3 - "$index_path" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+begin = "    <!-- CAICAI_WALLPAPER_BEGIN -->\n"
+end = "    <!-- CAICAI_WALLPAPER_END -->\n"
+
+while begin in text and end in text:
+    start = text.index(begin)
+    stop = text.index(end, start) + len(end)
+    text = text[:start] + text[stop:]
+
+path.write_text(text)
+PY
+}
+
+patch_package_identity() {
+  local package_path="$1"
+  python3 - "$package_path" <<'PY'
+from pathlib import Path
+import json
+import sys
+
+path = Path(sys.argv[1])
+data = json.loads(path.read_text())
+data["name"] = "openai-codex-electron"
+data["productName"] = "Codex"
+data["description"] = "Codex"
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n")
+PY
+}
+
+patch_bundle_identity() {
+  local plist_path="$APP_PATH/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleName Codex" "$plist_path"
+  /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $APP_DISPLAY_NAME" "$plist_path"
+}
+
+repack_app() {
+  local extract_dir="$1"
+  local new_asar="$2"
+  rm -rf "$new_asar" "$new_asar.unpacked"
+  run_asar pack \
+    --unpack-dir 'node_modules/@(better-sqlite3|node-pty|objc-js)' \
+    "$extract_dir" \
+    "$new_asar"
+}
+
+replace_asar() {
+  local new_asar="$1"
+  local old_prev="$ASAR_PATH.caicai-wallpaper-prev"
+  local unpacked_prev="$ASAR_UNPACKED_PATH.caicai-wallpaper-prev"
+
+  rm -rf "$old_prev" "$unpacked_prev"
+  mv "$ASAR_PATH" "$old_prev"
+  if [[ -d "$ASAR_UNPACKED_PATH" ]]; then
+    mv "$ASAR_UNPACKED_PATH" "$unpacked_prev"
+  fi
+
+  mv "$new_asar" "$ASAR_PATH"
+  if [[ -d "$new_asar.unpacked" ]]; then
+    mv "$new_asar.unpacked" "$ASAR_UNPACKED_PATH"
+  fi
+
+  rm -rf "$old_prev" "$unpacked_prev"
+}
+
+sign_app() {
+  if [[ "$SIGN_APP" != "1" ]]; then
+    return
+  fi
+  if ! command -v codesign >/dev/null 2>&1; then
+    echo "install-caicai-wallpaper: codesign not found; skipping app signing" >&2
+    return
+  fi
+  codesign --force --deep --sign - "$APP_PATH" >/dev/null
+}
+
+verify_app_signature() {
+  if command -v codesign >/dev/null 2>&1; then
+    codesign --verify --deep --strict "$APP_PATH"
+  fi
+}
+
+update_asar_integrity() {
+  local plist_path="$APP_PATH/Contents/Info.plist"
+  local hash
+  hash="$(node - "$ASAR_PATH" <<'NODE'
+const crypto = require('crypto');
+const fs = require('fs');
+
+const asarPath = process.argv[2];
+const fd = fs.openSync(asarPath, 'r');
+try {
+  const prefix = Buffer.alloc(16);
+  fs.readSync(fd, prefix, 0, prefix.length, 0);
+  const headerSize = prefix.readUInt32LE(12);
+  const header = Buffer.alloc(headerSize);
+  fs.readSync(fd, header, 0, header.length, 16);
+  process.stdout.write(crypto.createHash('sha256').update(header).digest('hex'));
+} finally {
+  fs.closeSync(fd);
+}
+NODE
+)"
+
+  /usr/libexec/PlistBuddy \
+    -c "Set :ElectronAsarIntegrity:Resources/app.asar:hash $hash" \
+    "$plist_path"
+}
+
+write_manifest() {
+  local state="$1"
+  python3 - "$MANIFEST_PATH" "$state" "$APP_PATH" "$IMAGE_PATH" <<'PY'
+from datetime import datetime, timezone
+from pathlib import Path
+import json
+import sys
+
+path = Path(sys.argv[1])
+state = sys.argv[2]
+app = sys.argv[3]
+image = sys.argv[4]
+path.write_text(json.dumps({
+    "state": state,
+    "app": app,
+    "image": image,
+    "updated_at": datetime.now(timezone.utc).isoformat(),
+    "css_asset": "webview/assets/caicai-wallpaper.css",
+    "image_asset": "webview/assets/caicai-wallpaper.jpg",
+}, ensure_ascii=False, indent=2) + "\n")
+PY
+}
+
+enable_wallpaper() {
+  need_app
+  need_cmd npx
+  need_cmd node
+  need_cmd python3
+  if [[ ! -f "$IMAGE_PATH" ]]; then
+    echo "install-caicai-wallpaper: missing wallpaper image: $IMAGE_PATH" >&2
+    exit 127
+  fi
+
+  if [[ ! -f "$BACKUP_PATH" ]]; then
+    cp "$ASAR_PATH" "$BACKUP_PATH"
+  fi
+
+  local tmp_dir
+  local new_asar
+  tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/caicodex-wallpaper.XXXXXX")"
+  new_asar="$(mktemp "${TMPDIR:-/tmp}/caicodex-wallpaper-app.XXXXXX.asar")"
+  rm -f "$new_asar"
+  trap "rm -rf '$tmp_dir' '$new_asar' '$new_asar.unpacked'" EXIT
+
+  run_asar extract "$ASAR_PATH" "$tmp_dir"
+  mkdir -p "$tmp_dir/webview/assets"
+  cp "$IMAGE_PATH" "$tmp_dir/$IMAGE_ASSET"
+  write_wallpaper_css "$tmp_dir/$CSS_ASSET"
+  patch_index_enable "$tmp_dir/webview/index.html"
+  patch_package_identity "$tmp_dir/package.json"
+  repack_app "$tmp_dir" "$new_asar"
+  replace_asar "$new_asar"
+  patch_bundle_identity
+  update_asar_integrity
+  write_manifest "enabled"
+  sign_app
+  verify_app_signature
+  echo "CAICAI Codex wallpaper enabled."
+}
+
+disable_wallpaper() {
+  need_app
+  need_cmd npx
+  need_cmd node
+  need_cmd python3
+
+  local tmp_dir
+  local new_asar
+  tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/caicodex-wallpaper.XXXXXX")"
+  new_asar="$(mktemp "${TMPDIR:-/tmp}/caicodex-wallpaper-app.XXXXXX.asar")"
+  rm -f "$new_asar"
+  trap "rm -rf '$tmp_dir' '$new_asar' '$new_asar.unpacked'" EXIT
+
+  run_asar extract "$ASAR_PATH" "$tmp_dir"
+  rm -f "$tmp_dir/$CSS_ASSET" "$tmp_dir/$IMAGE_ASSET"
+  patch_index_disable "$tmp_dir/webview/index.html"
+  patch_package_identity "$tmp_dir/package.json"
+  repack_app "$tmp_dir" "$new_asar"
+  replace_asar "$new_asar"
+  patch_bundle_identity
+  update_asar_integrity
+  write_manifest "disabled"
+  sign_app
+  verify_app_signature
+  echo "CAICAI Codex wallpaper disabled."
+}
+
+case "$MODE" in
+  enable)
+    enable_wallpaper
+    ;;
+  disable)
+    disable_wallpaper
+    ;;
+  status)
+    status
+    ;;
+esac

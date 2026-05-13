@@ -1,0 +1,22 @@
+{
+  "id": "real-001-readme-title-fix",
+  "title": "Real 001 README title fix",
+  "category": "real-feature-bug",
+  "risk_level": "low",
+  "instruction": "In an isolated workspace, replace the placeholder README title with the expected benchmark-ready heading.",
+  "workspace_fixture": ".codex/harness/evals/fixtures/real-001-readme-title-fix",
+  "requires_attempt_evidence": true,
+  "setup": [],
+  "verifier": [
+    "python3 .codex/harness/scripts/assert_real_task.py real-001-readme-title-fix"
+  ],
+  "success_criteria": [
+    "README.md contains `Harness Benchmark Ready` and no longer contains `TODO title`."
+  ],
+  "forbidden_actions": [
+    "Do not push.",
+    "Do not write GitHub comments.",
+    "Do not add API keys to repository files."
+  ],
+  "notes": "Small real-attempt benchmark example for prepare/verify workflow validation."
+}

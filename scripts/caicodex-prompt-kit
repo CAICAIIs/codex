@@ -1,0 +1,404 @@
+#!/usr/bin/env python3
+"""Claude Code / Hermes inspired prompt kit for CAICAI Codex.
+
+The kit keeps prompt guidance as small, reviewable project files. It does not
+copy third-party system prompts; it distills public/documented patterns into
+Chinese templates that can be used by Codex skills and humans.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+
+VERSION = 1
+MARKER = "<!-- caicodex-prompt-kit:v1 -->"
+
+
+class PromptKitError(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class Target:
+    root: Path
+    base: Path
+    skill_path: Path
+
+
+def git(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def find_root(start: Path) -> Path:
+    result = git(["rev-parse", "--show-toplevel"], start)
+    if result.returncode != 0:
+        raise PromptKitError("caicodex prompt-kit requires a git repository")
+    return Path(result.stdout.strip()).resolve()
+
+
+def target_from_args(args: argparse.Namespace) -> Target:
+    root = Path(args.root).expanduser().resolve() if args.root else find_root(Path.cwd())
+    return Target(
+        root=root,
+        base=root / ".codex" / "prompt-kit",
+        skill_path=root / ".codex" / "skills" / "caicodex-prompt-kit" / "SKILL.md",
+    )
+
+
+def managed_header(title: str) -> str:
+    return f"{MARKER}\n# {title}\n\n"
+
+
+def templates() -> dict[str, str]:
+    return {
+        "README.md": managed_header("CAICodex Prompt Kit")
+        + """这个目录把 Claude Code 与 Hermes Agent 中可验证的提示词工程经验，转成适合 CAICAIIs/codex 的中文开发提示模板。
+
+## 采用的原则
+
+- 分段提示：把身份、执行、工具、验收、记忆分开维护，避免一坨大 prompt。
+- 稳定优先：稳定规则放在长期文件里，临时任务只放在当次 prompt，减少上下文噪声。
+- 证据优先：每个任务先写验收路径，再实现，再用命令/日志/截图证明。
+- 减法优先：先问能否删除、复用、合并、移动，再新增代码。
+- 记忆克制：只保存跨任务仍然有价值、不能从代码直接推导的经验。
+- 反方审查：复杂方案要有人质疑假设、测试 oracle 和安全边界。
+
+## 日常用法
+
+```bash
+caicodex prompt-kit print --task "实现某个功能"
+caicodex prompt-kit install
+caicodex prompt-kit status
+caicodex prompt-kit check
+```
+
+安装后会生成项目 skill：
+
+```text
+.codex/skills/caicodex-prompt-kit/SKILL.md
+```
+
+以后可以在需求前加 `$caicodex-prompt-kit`，让 Agent 先按中文任务卡、验收路径、减法检查和 review gate 工作。
+""",
+        "development.md": managed_header("开发任务提示模板")
+        + """用于功能实现、重构、bug 修复的主提示结构。
+
+## 推荐 Prompt
+
+```text
+请按 CAICodex 开发循环处理这个需求：
+
+需求：
+<贴我的需求、issue、日志或截图描述>
+
+输出和执行要求：
+1. 先用中文写需求解码卡：一句话目标、事实/推断/偏好、影响范围、验收方式、不确定程度。
+2. 不要默认同意我的判断；先指出最可能错的假设和需要验证的证据。
+3. 先做减法检查：能否删除、复用、合并、移动现有代码解决；只有必要时才新增代码。
+4. 先确定最窄可运行验证，再实现；完成后必须跑最窄验证和相关验证。
+5. 大改动前创建 checkpoint；远程写入、push、GitHub 评论必须单独确认。
+6. 最终只汇报结论、改了哪里、验证命令和剩余风险。
+```
+
+## Agent 执行顺序
+
+1. 读最近的 `AGENTS.md` 和 `.codex/harness/README.md`、`commands.md`、`verification.md`。
+2. 用 `rg` 找相似实现、入口、测试和配置。
+3. 如果涉及外部库/API/平台行为，先联网找官方文档或上游源码。
+4. 写执行卡：要做、不做、验收、风险、减法检查。
+5. 小步实现，保留命令输出作为证据。
+6. diff 自查：范围、生成物、密钥、远程写入、测试是否验证真实需求。
+""",
+        "review.md": managed_header("Review Gate")
+        + """用于实现后自审或独立 reviewer 审查。
+
+## 审查问题
+
+- 需求是否被正确理解？有没有把用户偏好误当事实？
+- 测试 oracle 来自哪里：需求、文档、现有行为、协议，还是模型臆测？
+- 如果实现是错的，测试会失败吗？
+- 是否引入了重复真相源、未来扩展点或过度防御包装？
+- 是否有可以删除或合并的代码没删？
+- 是否修改了无关文件、生成物、密钥、远程状态？
+- 错误处理是否 fail fast：内部不变量直接报错，外部输入给清晰错误？
+- 是否需要记录一条可复用经验到 harness，而不是塞进全局规则？
+
+## 通过门
+
+```text
+通过条件：
+- 最窄验证通过。
+- 相关验证通过或明确说明为什么没跑。
+- diff 范围和需求匹配。
+- 没有密钥和无关生成物。
+- 远程写入没有发生，除非当前对话明确授权。
+```
+""",
+        "memory.md": managed_header("记忆与经验沉淀")
+        + """借鉴 Claude Code / Hermes 的记忆设计，但保持 CAICodex 的克制规则。
+
+## 只保存这些
+
+- 用户稳定偏好：例如输出语言、review 方式、常用工具。
+- 项目非显然事实：不能从代码、README、git log 直接推导的信息。
+- 反复踩坑的真实失败：命令、失败现象、原因、下次如何避免。
+- 外部系统指针：文档链接、服务位置、账号边界，不保存密钥。
+
+## 不保存这些
+
+- 当前任务临时状态。
+- 代码里已经清楚表达的架构。
+- 能从测试或 git 历史推导的信息。
+- 没验证过的猜测。
+- 任何 token、cookie、私钥、密码或可恢复的敏感内容。
+
+## 保存格式
+
+```text
+经验：
+触发条件：
+证据：
+下次动作：
+失效条件：
+```
+""",
+        "research-notes.md": managed_header("来源与取舍")
+        + """## 主要来源
+
+- Anthropic Claude Code 官方文档：hooks、subagents、memory、slash commands、settings。
+- NousResearch/hermes-agent：README、`tools/memory_tool.py`、`cli-config.yaml.example`、skills/toolset/session reset 设计。
+- 本地 `Claude-Code-Source-Study`：System Prompt 工程、Hooks 系统、Memory 系统、Agent 设计模式。
+
+## 采纳
+
+- 分段提示和稳定/动态内容分离。
+- 声明式 hook 与 review gate。
+- 有界持久记忆，且注入内容需要防 prompt injection。
+- 技能/流程作为小模块，不把所有规则塞进一个超长 prompt。
+- 保存经验前先判断是否“非显然、跨任务仍有价值”。
+
+## 不采纳
+
+- 不复制 Claude Code 逆向 prompt 原文。
+- 不默认启用大量 subagent 或多模型。
+- 不把 memory 自动写入全局文件。
+- 不在没有评测收益前改 Codex Rust 核心 prompt 架构。
+""",
+    }
+
+
+def skill_template() -> str:
+    return f"""---
+name: caicodex-prompt-kit
+description: Use when the user wants Claude Code/Hermes-inspired prompting, clearer Chinese task cards, implementation prompts, review gates, memory hygiene, or a safer path from vague request to verified code in CAICAIIs/codex.
+---
+
+{MARKER}
+# CAICodex Prompt Kit
+
+使用本 skill 时，先读取项目内 `.codex/prompt-kit/README.md`，再按需求类型选择：
+
+- `.codex/prompt-kit/development.md`：功能实现、调试、重构。
+- `.codex/prompt-kit/review.md`：实现后 review 和验收。
+- `.codex/prompt-kit/memory.md`：判断是否沉淀经验。
+- `.codex/prompt-kit/research-notes.md`：来源与取舍。
+
+默认中文输出。不要复制第三方 system prompt 原文。把 Claude Code/Hermes 的经验落实成：
+
+1. 中文需求解码卡。
+2. 减法检查。
+3. 明确验收命令。
+4. 实现与验证。
+5. review gate。
+6. 必要时记录项目 harness 经验。
+
+若需求小且验收清楚，直接实现；若跨模块、高风险或验收不清，先升级到 OpenSpec/harness/RLCR。
+"""
+
+
+def relative_files(target: Target, include_skill: bool) -> dict[Path, str]:
+    files = {target.base / name: content for name, content in templates().items()}
+    if include_skill:
+        files[target.skill_path] = skill_template()
+    return files
+
+
+def write_managed_file(path: Path, content: str, force: bool) -> str:
+    if path.exists():
+        existing = path.read_text(encoding="utf-8")
+        if existing == content:
+            return "unchanged"
+        if MARKER not in existing and not force:
+            raise PromptKitError(f"refusing to overwrite unmanaged file: {path}")
+        if not force:
+            raise PromptKitError(f"file has local changes; rerun with --force after review: {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return "written"
+
+
+def install(args: argparse.Namespace) -> None:
+    target = target_from_args(args)
+    result = {}
+    for path, content in relative_files(target, include_skill=not args.no_skill).items():
+        result[str(path.relative_to(target.root))] = write_managed_file(path, content, args.force)
+    if args.json:
+        print(json.dumps({"root": str(target.root), "files": result}, indent=2, sort_keys=True))
+        return
+    for rel, state in result.items():
+        print(f"{state}: {rel}")
+
+
+def installed_files(target: Target) -> list[Path]:
+    paths = list((target.base / name for name in templates()))
+    paths.append(target.skill_path)
+    return paths
+
+
+def status(args: argparse.Namespace) -> None:
+    target = target_from_args(args)
+    files = [
+        {
+            "path": str(path.relative_to(target.root)),
+            "exists": path.exists(),
+            "managed": path.exists() and MARKER in path.read_text(encoding="utf-8", errors="replace"),
+        }
+        for path in installed_files(target)
+    ]
+    payload = {
+        "root": str(target.root),
+        "installed": all(item["exists"] for item in files),
+        "files": files,
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return
+    print(f"root: {target.root}")
+    print(f"installed: {'yes' if payload['installed'] else 'no'}")
+    for item in files:
+        state = "managed" if item["managed"] else "missing" if not item["exists"] else "unmanaged"
+        print(f"{state}: {item['path']}")
+
+
+def check(args: argparse.Namespace) -> None:
+    target = target_from_args(args)
+    missing = [path for path in installed_files(target) if not path.exists()]
+    unmanaged = [
+        path
+        for path in installed_files(target)
+        if path.exists() and MARKER not in path.read_text(encoding="utf-8", errors="replace")
+    ]
+    if missing or unmanaged:
+        for path in missing:
+            print(f"missing: {path.relative_to(target.root)}", file=sys.stderr)
+        for path in unmanaged:
+            print(f"unmanaged: {path.relative_to(target.root)}", file=sys.stderr)
+        raise PromptKitError("prompt kit check failed")
+    print("prompt kit check passed")
+
+
+def render_prompt(args: argparse.Namespace) -> str:
+    task = args.task.strip() if args.task else "<在这里贴需求、issue、日志或截图描述>"
+    mode = args.mode
+    title = {
+        "dev": "开发实现",
+        "debug": "诊断调试",
+        "review": "审查验收",
+        "research": "调研决策",
+    }[mode]
+    return f"""请按 CAICodex Prompt Kit 进入「{title}」模式。
+
+任务：
+{task}
+
+请先输出中文需求解码卡：
+- 一句话目标
+- 事实 / 推断 / 偏好
+- 影响范围
+- 验收路径
+- 不确定程度
+- 推荐动作
+
+执行要求：
+1. 先求真，再支持；指出最可能错误的假设。
+2. 先做减法检查：删除、复用、合并、移动是否足够。
+3. 先确定最窄验证，再改代码。
+4. 需要外部知识时优先官方文档、上游源码、release notes 和 issue/PR。
+5. 实现后跑验证，并按 review gate 自查 diff、密钥、生成物、远程写入风险。
+6. 最终用中文简报：结论、改动路径、验证命令、剩余风险。
+"""
+
+
+def print_prompt(args: argparse.Namespace) -> None:
+    print(render_prompt(args))
+
+
+def sources(_args: argparse.Namespace) -> None:
+    for line in [
+        "Anthropic Claude Code docs: https://docs.anthropic.com/en/docs/claude-code/overview",
+        "Claude Code memory docs: https://docs.anthropic.com/en/docs/claude-code/memory",
+        "Claude Code hooks docs: https://docs.anthropic.com/en/docs/claude-code/hooks",
+        "Claude Code subagents docs: https://docs.anthropic.com/en/docs/claude-code/sub-agents",
+        "Hermes Agent repo: https://github.com/NousResearch/hermes-agent",
+        "Hermes docs: https://hermes-agent.nousresearch.com/docs/",
+        "Local source study: /Users/caicaiis/Documents/github/Claude-Code-Source-Study",
+    ]:
+        print(line)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="CAICAI Codex prompt-kit")
+    parser.add_argument("--root", help="target git repository root")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    install_cmd = sub.add_parser("install", help="install or update prompt kit files")
+    install_cmd.add_argument("--force", action="store_true")
+    install_cmd.add_argument("--no-skill", action="store_true")
+    install_cmd.add_argument("--json", action="store_true")
+    install_cmd.set_defaults(func=install)
+
+    status_cmd = sub.add_parser("status", help="show prompt kit status")
+    status_cmd.add_argument("--json", action="store_true")
+    status_cmd.set_defaults(func=status)
+
+    check_cmd = sub.add_parser("check", help="verify prompt kit files exist")
+    check_cmd.set_defaults(func=check)
+
+    print_cmd = sub.add_parser("print", help="print a Chinese task prompt")
+    print_cmd.add_argument("--task", default="")
+    print_cmd.add_argument("--mode", choices=["dev", "debug", "review", "research"], default="dev")
+    print_cmd.set_defaults(func=print_prompt)
+
+    sources_cmd = sub.add_parser("sources", help="print research sources")
+    sources_cmd.set_defaults(func=sources)
+
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
+    try:
+        args.func(args)
+        return 0
+    except PromptKitError as exc:
+        print(f"caicodex-prompt-kit: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

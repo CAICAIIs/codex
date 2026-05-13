@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CAICAIIs Codex Model Router",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "updated_at",
+    "default_language",
+    "principles",
+    "models",
+    "routes",
+    "remote_write_policy"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "integer", "minimum": 1 },
+    "updated_at": { "type": "string" },
+    "default_language": { "type": "string" },
+    "principles": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+    "models": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["role", "allowed_actions", "best_for", "known_limits"],
+        "properties": {
+          "role": { "type": "string" },
+          "default_effort": { "type": "string" },
+          "default_model": { "type": "string" },
+          "endpoint": { "type": "string" },
+          "allowed_actions": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "best_for": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "known_limits": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "routes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "when",
+          "lead",
+          "advisors",
+          "required_artifacts",
+          "budget",
+          "stop_loss"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{2,80}$"
+          },
+          "when": { "type": "string" },
+          "enabled": { "type": "boolean" },
+          "disabled_reason": { "type": "string" },
+          "lead": { "type": "string" },
+          "advisors": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "required_artifacts": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "budget": {
+            "type": "object",
+            "required": [
+              "max_wall_minutes",
+              "max_review_rounds",
+              "max_human_interventions"
+            ],
+            "properties": {
+              "max_wall_minutes": { "type": "integer", "minimum": 1 },
+              "max_review_rounds": { "type": "integer", "minimum": 0 },
+              "max_human_interventions": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false
+          },
+          "stop_loss": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "remote_write_policy": {
+      "type": "object",
+      "required": ["default", "requires_current_conversation_confirmation"],
+      "properties": {
+        "default": { "type": "string" },
+        "requires_current_conversation_confirmation": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
