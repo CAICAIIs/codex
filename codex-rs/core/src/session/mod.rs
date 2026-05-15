@@ -173,12 +173,15 @@ use crate::compact::collect_user_messages;
 use crate::config::Config;
 use crate::config::Constrained;
 use crate::config::ConstraintResult;
+use crate::config::PermissionProfileState;
 use crate::config::StartedNetworkProxy;
 use crate::config::resolve_web_search_mode_for_turn;
 use crate::context_manager::ContextManager;
 use crate::context_manager::TotalTokenUsageBreakdown;
 use crate::thread_rollout_truncation::initial_history_has_prior_user_turns;
 use codex_config::CONFIG_TOML_FILE;
+use codex_config::ConfigLayerSource;
+use codex_config::ConfigLayerStackOrdering;
 use codex_config::types::McpServerConfig;
 use codex_model_provider_info::ModelProviderInfo;
 use codex_protocol::config_types::ShellEnvironmentPolicy;
@@ -615,8 +618,7 @@ impl Codex {
             compact_prompt: config.compact_prompt.clone(),
             approval_policy: config.permissions.approval_policy.clone(),
             approvals_reviewer: config.approvals_reviewer,
-            permission_profile: config.permissions.permission_profile.clone(),
-            active_permission_profile: config.permissions.active_permission_profile(),
+            permission_profile_state: session_permission_profile_state_from_config(&config)?,
             windows_sandbox_level: WindowsSandboxLevel::from_config(&config),
             cwd: config.cwd.clone(),
             codex_home: config.codex_home.clone(),
@@ -814,6 +816,20 @@ fn get_service_tier(
     account_plan_type
         .is_some_and(is_enterprise_default_service_tier_plan)
         .then_some(ServiceTier::Fast.request_value().to_string())
+}
+
+fn session_permission_profile_state_from_config(
+    config: &Config,
+) -> CodexResult<PermissionProfileState> {
+    config
+        .permissions
+        .permission_profile_state()
+        .clone_with_permission_profile(config.permissions.effective_permission_profile())
+        .map_err(|err| {
+            CodexErr::Fatal(format!(
+                "failed to materialize workspace roots for session permissions: {err}"
+            ))
+        })
 }
 
 fn is_enterprise_default_service_tier_plan(plan_type: AccountPlanType) -> bool {
@@ -1466,7 +1482,6 @@ impl Session {
             contributor.on_config_changed(
                 &self.services.session_extension_data,
                 &self.services.thread_extension_data,
-                self.conversation_id,
                 previous_config,
                 new_config,
             );
@@ -1480,37 +1495,62 @@ impl Session {
         //
         // Prefer `refresh_runtime_config()` when the host can already provide a materialized
         // config snapshot. This file-based path exists for legacy local reload flows.
-        let config_toml_path = {
+        let config_toml_paths = {
             let state = self.state.lock().await;
-            state
-                .session_configuration
-                .codex_home
-                .join(CONFIG_TOML_FILE)
+            let config = &state.session_configuration.original_config_do_not_use;
+            let user_config_paths = config
+                .config_layer_stack
+                .get_user_layers(
+                    ConfigLayerStackOrdering::LowestPrecedenceFirst,
+                    /*include_disabled*/ true,
+                )
+                .into_iter()
+                .filter_map(|layer| match &layer.name {
+                    ConfigLayerSource::User { file, .. } => Some(file.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            if user_config_paths.is_empty() {
+                vec![
+                    state
+                        .session_configuration
+                        .codex_home
+                        .join(CONFIG_TOML_FILE),
+                ]
+            } else {
+                user_config_paths
+            }
         };
 
-        let user_config = match std::fs::read_to_string(&config_toml_path) {
-            Ok(contents) => match toml::from_str::<toml::Value>(&contents) {
-                Ok(config) => config,
+        let mut reloaded_user_configs = Vec::with_capacity(config_toml_paths.len());
+        for config_toml_path in config_toml_paths {
+            let user_config = match std::fs::read_to_string(&config_toml_path) {
+                Ok(contents) => match toml::from_str::<toml::Value>(&contents) {
+                    Ok(config) => config,
+                    Err(err) => {
+                        warn!("failed to parse user config while reloading layer: {err}");
+                        return;
+                    }
+                },
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                    toml::Value::Table(Default::default())
+                }
                 Err(err) => {
-                    warn!("failed to parse user config while reloading layer: {err}");
+                    warn!("failed to read user config while reloading layer: {err}");
                     return;
                 }
-            },
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                toml::Value::Table(Default::default())
-            }
-            Err(err) => {
-                warn!("failed to read user config while reloading layer: {err}");
-                return;
-            }
-        };
+            };
+            reloaded_user_configs.push((config_toml_path, user_config));
+        }
 
         let next_config = {
             let state = self.state.lock().await;
             let mut config = (*state.session_configuration.original_config_do_not_use).clone();
-            config.config_layer_stack = config
-                .config_layer_stack
-                .with_user_config(&config_toml_path, user_config);
+            for (config_toml_path, user_config) in reloaded_user_configs {
+                config.config_layer_stack = config
+                    .config_layer_stack
+                    .with_user_config(&config_toml_path, user_config);
+            }
             config.tool_suggest =
                 resolve_tool_suggest_config_from_layer_stack(&config.config_layer_stack);
             config
@@ -2052,6 +2092,7 @@ impl Session {
             turn_context,
             call_id,
             args,
+            #[allow(deprecated)]
             turn_context.cwd.clone(),
             cancellation_token,
         )
@@ -2248,6 +2289,9 @@ impl Session {
             turn_id: turn_context.sub_id.clone(),
             questions: args.questions,
         });
+        turn_context
+            .turn_metadata_state
+            .mark_user_input_requested_during_turn();
         self.send_event(turn_context, event).await;
         rx_response.await.ok()
     }
@@ -2631,6 +2675,7 @@ impl Session {
                     turn_context.approval_policy.value(),
                     turn_context.config.approvals_reviewer,
                     self.services.exec_policy.current().as_ref(),
+                    #[allow(deprecated)]
                     &turn_context.cwd,
                     turn_context
                         .features
@@ -2764,6 +2809,7 @@ impl Session {
             contextual_user_sections.push(
                 UserInstructions {
                     text: user_instructions.to_string(),
+                    #[allow(deprecated)]
                     directory: turn_context.cwd.to_string_lossy().into_owned(),
                 }
                 .render(),

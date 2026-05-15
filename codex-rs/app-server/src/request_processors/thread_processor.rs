@@ -1,5 +1,7 @@
 use super::*;
 use crate::error_code::method_not_found;
+use codex_protocol::models::BUILT_IN_PERMISSION_PROFILE_DANGER_FULL_ACCESS;
+use codex_protocol::models::BUILT_IN_PERMISSION_PROFILE_WORKSPACE;
 
 const THREAD_LIST_DEFAULT_LIMIT: usize = 25;
 const THREAD_LIST_MAX_LIMIT: usize = 100;
@@ -975,7 +977,7 @@ impl ThreadRequestProcessor {
         let requested_permissions_trust_project =
             requested_permissions_trust_project(&typesafe_overrides, config.cwd.as_path());
         let effective_permissions_trust_project = permission_profile_trusts_project(
-            &config.permissions.permission_profile(),
+            &config.permissions.effective_permission_profile(),
             config.cwd.as_path(),
         );
 
@@ -3903,7 +3905,9 @@ fn requested_permissions_trust_project(overrides: &ConfigOverrides, cwd: &Path) 
 
     if matches!(
         overrides.default_permissions.as_deref(),
-        Some(":workspace" | ":danger-no-sandbox")
+        Some(
+            BUILT_IN_PERMISSION_PROFILE_WORKSPACE | BUILT_IN_PERMISSION_PROFILE_DANGER_FULL_ACCESS
+        )
     ) {
         return true;
     }
